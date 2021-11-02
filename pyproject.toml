@@ -5,9 +5,13 @@ description = "UvA MSc AI - Natural Language Processing 1 Lab Assignments"
 authors = ["Your Name <you@example.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = ">=3.7,<3.11"
+jupyterlab = "^3.2.1"
+numpy = "^1.21.3"
 
 [tool.poetry.dev-dependencies]
+black = "^21.10b0"
+flake8 = "^4.0.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
