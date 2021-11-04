@@ -1,2 +1,4 @@
+.vim
+.mypy.ini
 reviews.json
 sent_lexicon
