@@ -75,7 +75,11 @@ def compute_bin_score(word_list: List[str], lexicon: Dict):
 
 
 def classify_document(
-    document: Dict, lexicon: Dict, mode: str = "unweighted", threshold: float = 8.0
+    document: Dict,
+    lexicon: Dict,
+    mode: str = "unweighted",
+    thresh: float = 8.0,
+    thresh_kind: str = "absolute",
 ) -> int:
     """
     Classifies a document using a lexicon approach as either positive or negative.
@@ -89,10 +93,12 @@ def classify_document(
         The lexicon to be used for scoring
     mode : str
         The mode of classification.
-        "unweighted" for binary classification,
-        "weighted" for weighted classification
-    threshold : float, default 8.0
+    thresh : float, default 8.0
         The threshold to be used for classification.
+    thresh_kind : str, default "absolute"
+        The kind of threshold to be used for classification.
+        "absolute" for absolute threshold
+        "density" for density threshold
 
     Returns
     -------
@@ -104,41 +110,21 @@ def classify_document(
         "weighted",
     ], "`mode` must be either 'unweighted' or 'weighted'"
     # flatten document
-    data = [word.lower() for sentence in document["content"] for word, _pos in sentence]
+    data = [
+        word.lower()
+        for sentence in document["content"]
+        for word, _pos in sentence
+        if word.lower() in lexicon and lexicon[word.lower()]["polarity"] in [1, -1]
+    ]
     if mode == "unweighted":
         score_func = compute_bin_score
     else:
         score_func = compute_weighted_score
     score = score_func(data, lexicon)
+    if thresh_kind == "density":
+        thresh = np.ceil(thresh * len(data))
     # finally, we can classify
-    return 1 if score > threshold else -1
-
-
-def determine_threshold(
-    documents: List[Dict], lexicon: Dict, mode: str = "unweighted"
-) -> float:
-    """
-    Determines the threshold to be used for classification, based on the
-    average imbalance of positive to negative words in a document.
-    """
-    diffs = np.zeros(len(documents), dtype=float)
-    for i, doc in enumerate(documents):
-        n_positives = 0
-        n_negatives = 0
-        for sentence in doc["content"]:
-            for word, _pos in sentence:
-                word = word.lower()
-                if word in lexicon:
-                    if mode == "unweighted":
-                        weight = 1
-                    else:
-                        weight = lexicon[word]["strength"]
-                    if lexicon[word]["polarity"] == 1:
-                        n_positives += 1 * weight
-                    elif lexicon[word]["polarity"] == -1:
-                        n_negatives += 1 * weight
-        diffs[i] = n_positives - n_negatives
-    return np.ceil(np.mean(diffs))
+    return 1 if score > thresh else -1
 
 
 def build_lexicon(file_path: str) -> Dict:
@@ -173,18 +159,70 @@ def build_lexicon(file_path: str) -> Dict:
     return lexicon
 
 
+def determine_threshold(
+    documents: List[Dict],
+    lexicon: Dict,
+    mode: str = "unweighted",
+    kind: str = "absolute",
+) -> float:
+    """
+    Determines the threshold to be used for classification, based on the
+    average imbalance of positive to negative words in a document.
+
+    Parameters
+    ----------
+    documents : List[dict]
+        The list of documents to be used for threshold determination.
+    lexicon : dict
+        The lexicon to be used for word polarity determination.
+    mode : str, default "unweighted"
+        The mode of classification.
+    kind : str, default "absolute"
+        The kind of threshold to be used for classification.
+        "absolute" for absolute threshold
+        "density" for density threshold
+    """
+    diffs = np.zeros(len(documents), dtype=float)
+    lens = diffs.copy()
+    for i, doc in enumerate(documents):
+        n_positives = 0
+        n_negatives = 0
+        for sentence in doc["content"]:
+            for word, _pos in sentence:
+                word = word.lower()
+                if word in lexicon:
+                    lens[i] += 1
+                    if mode == "unweighted":
+                        weight = 1
+                    else:
+                        weight = lexicon[word]["strength"]
+                    if lexicon[word]["polarity"] == 1:
+                        n_positives += 1 * weight
+                    elif lexicon[word]["polarity"] == -1:
+                        n_negatives += 1 * weight
+        diffs[i] = n_positives - n_negatives
+    if kind == "density":
+        return np.mean(diffs / lens)
+    else:
+        return np.ceil(np.mean(diffs))
+
+
 if __name__ == "__main__":
     # load data
     lexicon = build_lexicon("sent_lexicon")
     with open("reviews.json", mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
 
-    MODE = 'weighted'
-    thresh = determine_threshold(reviews, lexicon, MODE)
+    MODE = "weighted"
+    THRESH_KIND = "density"
+    thresh = determine_threshold(reviews, lexicon, MODE, THRESH_KIND)
 
     # classify
     y_pred = np.array(
-        [classify_document(review, lexicon, MODE, thresh) for review in reviews]
+        [
+            classify_document(review, lexicon, MODE, thresh, THRESH_KIND)
+            for review in reviews
+        ]
     )
     y_true = np.array([1 if review["sentiment"] == "POS" else -1 for review in reviews])
 
