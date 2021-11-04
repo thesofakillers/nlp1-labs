@@ -1,5 +1,5 @@
 """ Lexicon-based sentiment analysis. """
-from typing import Dict, List
+import typing as tg
 import json
 import numpy as np
 
@@ -25,16 +25,16 @@ POS_MAP = {
 }
 
 
-def compute_weighted_score(word_list: List[str], lexicon: Dict) -> int:
+def compute_weighted_score(word_list: tg.List[str], lexicon: tg.Dict) -> int:
     """
     Computes the weighted score by summing the strength of each word in the
     word list
 
     Parameters
     ----------
-    word_list : List[str]
+    word_list : tg.List[str]
         The list of words to be scored.
-    lexicon : Dict
+    lexicon : tg.Dict
         The lexicon to be used for scoring
     Returns
     -------
@@ -51,16 +51,16 @@ def compute_weighted_score(word_list: List[str], lexicon: Dict) -> int:
     return weighted_pol_arr.sum().astype(int)
 
 
-def compute_bin_score(word_list: List[str], lexicon: Dict):
+def compute_bin_score(word_list: tg.List[str], lexicon: tg.Dict):
     """
     Computes the binary score by counting how many words have a positive or a
     negative label in the sentiment lexicon
 
     Parameters
     ----------
-    word_list : List[str]
+    word_list : tg.List[str]
         The list of words to be scored.
-    lexicon : Dict
+    lexicon : tg.Dict
         The lexicon to be used for scoring
 
     Returns
@@ -75,8 +75,8 @@ def compute_bin_score(word_list: List[str], lexicon: Dict):
 
 
 def classify_document(
-    document: Dict,
-    lexicon: Dict,
+    document: tg.Dict,
+    lexicon: tg.Dict,
     mode: str = "unweighted",
     thresh: float = 8.0,
     thresh_kind: str = "absolute",
@@ -127,7 +127,7 @@ def classify_document(
     return 1 if score > thresh else -1
 
 
-def build_lexicon(file_path: str) -> Dict:
+def build_lexicon(file_path: str) -> tg.Dict:
     """
     Builds a lexicon from a file.
 
@@ -139,7 +139,7 @@ def build_lexicon(file_path: str) -> Dict:
     --------
     A dictionary containing the lexicon data
     """
-    lexicon: Dict = {}
+    lexicon: tg.Dict = {}
     with open(file_path, "r") as f:
         # parse file line by line
         for line in f:
@@ -160,8 +160,8 @@ def build_lexicon(file_path: str) -> Dict:
 
 
 def determine_threshold(
-    documents: List[Dict],
-    lexicon: Dict,
+    documents: tg.List[tg.Dict],
+    lexicon: tg.Dict,
     mode: str = "unweighted",
     kind: str = "absolute",
 ) -> float:
@@ -171,7 +171,7 @@ def determine_threshold(
 
     Parameters
     ----------
-    documents : List[dict]
+    documents : tg.List[dict]
         The list of documents to be used for threshold determination.
     lexicon : dict
         The lexicon to be used for word polarity determination.
