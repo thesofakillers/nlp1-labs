@@ -1,8 +1,7 @@
 """Review Sentiment Analysis using Naive Bayes"""
 
 import typing as tg
-
-# from collections import Counter
+import argparse
 import json
 import numpy as np
 import numpy.typing as npt
@@ -15,7 +14,7 @@ SENT_MAP = {
 
 def extract_vocab(documents: tg.List[tg.Dict]):
     """
-    Extracts the vocabulary from the documents
+    Extracts the vocabulary from the documents,
 
     Parameters
     ----------
@@ -23,96 +22,72 @@ def extract_vocab(documents: tg.List[tg.Dict]):
 
     Returns
     -------
-    set
+    dict
         The vocabulary
     """
-    vocab = set()
+    vocab = {}
     for doc in documents:
         for sentence in doc["content"]:
             for word, _pos in sentence:
-                vocab.add(word.lower())
+                word = word.lower()
+                if word not in vocab:
+                    vocab[word] = {"POS": 0, "NEG": 0}
+                if doc["sentiment"] == "POS":
+                    vocab[word]["POS"] += 1
+                elif doc["sentiment"] == "NEG":
+                    vocab[word]["NEG"] += 1
     return vocab
 
 
-# def extract_vocab(documents: tg.List[tg.Dict]):
-#     """
-#     Extracts the vocabulary from the documents
-#     i.e. the count of each word across all documents
-
-#     Parameters
-#     ----------
-#     documents : tg.List[Dict]
-#         tg.List of Documents
-
-#     Returns
-#     -------
-#     Counter
-#         The computed vocabulary
-#     """
-#     vocab: tg.Counter = Counter()
-#     for doc in documents:
-#         for sentence in doc["content"]:
-#             word: str
-#             for word, _pos in sentence:
-#                 vocab[word.lower()] += int(1)
-#     return vocab
-
-
-def train_nb(classes: tg.Tuple[str, ...], documents: tg.List[tg.Dict]):
+def train_nb(
+    classes: tg.Tuple[str, ...], documents: tg.List[tg.Dict], alpha: float = 1
+):
     """
-    Trains the Naive Bayes model
-
+    Trains a Naive Bayes model
     Parameters
     ----------
     classes : tg.Tuple[str, ...]
+        the classes that the model should predict
     documents : tg.List[Dict]
+        the documents on which to train on
+    alpha : float
+        smoothing parameter, which is added to word counts.
 
     Returns
     -------
-    TODO
-    not sure
+    vocab : tg.Dict
+        the computed vocabulary for the input documents
+    logprior : npt.NDArray
+        (n_classes, ) array of log priors
+    loglikelihood : tg.List[tg.Dict]
+        (n_classes, ) array of dictionary containing loglikelihood of each word
     """
-    vocab: tg.Set = extract_vocab(documents)
+    vocab: tg.Dict = extract_vocab(documents)
+    if alpha == 0:
+        # filter vocab if we are not applying smoothing
+        vocab = {k: v for (k, v) in vocab.items() if v["POS"] > 0 and v["NEG"] > 0}
+
     n_docs = len(documents)
-    prior = np.zeros(len(classes))
-
-    nb_model: tg.Dict = {}
+    logprior = np.zeros(len(classes))
+    loglikelihood: tg.List[tg.Dict] = [{} for _ in range(len(classes))]
     for c, clx in enumerate(classes):
-        class_docs = [doc for doc in documents if SENT_MAP[doc["sentiment"]] == clx]
-        n_docs_clx = len(class_docs)
-        prior[c] = n_docs_clx / n_docs
-
-        class_text = [
-            word.lower()
-            for doc in class_docs
-            for sentence in doc["content"]
-            for word, _pos in sentence
-        ]
-
+        clx_docs = [doc for doc in documents if doc["sentiment"] == clx]
+        n_docs_clx = len(clx_docs)
+        logprior[c] = np.log(n_docs_clx / n_docs)
+        # compute sum of word counts, which we'll use to compute loglikelihood (denom)
+        word_counts_sum = (np.array([vocab[word][clx] for word in vocab]) + alpha).sum()
         for word in vocab:
-            if word in class_text:
-                nb_model[word][c]["count"] += 1
-        word_counts = np.array(
-            [nb_model[word][c]["count"] for word in vocab if word in class_text]
-        )
-        for word in vocab:
-            if word in class_text:
-                nb_model[word][c]["likelihood"] = (
-                    nb_model[word][c]["count"] + 1 / (word_counts + 1).sum()
-                )
-        # word_counts = np.array(
-        #     [class_text.count(word) for word in vocab if word in class_text]
-        # )
-        # likelihood[:, c] = word_counts + 1 / (word_counts + 1).sum()
-
-    return vocab, prior, nb_model
+            loglikelihood[c][word] = np.log(
+                (vocab[word][clx] + alpha) / (word_counts_sum)
+            )
+    return vocab, logprior, loglikelihood
 
 
 def nb_predict(
     classes: tg.Tuple[str, ...],
     vocab: tg.Set,
-    prior: npt.NDArray[float],
-    nb_model: tg.Dict,
+    logprior: npt.NDArray[float],
+    loglikelihood: tg.Dict,
     doc: tg.Dict,
 ):
     """
@@ -139,25 +114,41 @@ def nb_predict(
     ]
     score: npt.NDArray = np.zeros(len(classes), dtype=float)
     for c, clx in enumerate(classes):
-        score[c] = np.log(prior[c])
+        score[c] = logprior[c]
         for word in doc_text:
-            if word in nb_model:
-                score[c] += np.log(nb_model[word][c]["likelihood"])
+            if word in vocab:
+                score[c] += loglikelihood[c][word]
 
     return np.argmax(score)
 
 
 if __name__ == "__main__":
 
-    with open("reviews.json", mode="r", encoding="utf-8") as f:
+    parser = argparse.ArgumentParser(description="Naive Bayes Sentiment Analysis")
+    parser.add_argument(
+        "-d",
+        "--data",
+        type=str,
+        help="Path to the training data",
+        default="reviews.json",
+    )
+    parser.add_argument(
+        "--alpha", "-a", type=int, help="Value to use for Smoothing", default=0
+    )
+    args = parser.parse_args()
+    with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
 
     train_idxs = range(0, 900)
     test_idxs = range(900, 1000)
-    train_reviews = [reviews[i] for i in train_idxs]
-    test_reviews = [reviews[i] for i in test_idxs]
+    train_reviews = [
+        review for review in reviews for i in train_idxs if review["cv"] == i
+    ]
+    test_reviews = [
+        review for review in reviews for i in test_idxs if review["cv"] == i
+    ]
 
-    vocab, prior, nb_model = train_nb(("POS", "NEG"), train_reviews)
+    vocab, prior, nb_model = train_nb(("POS", "NEG"), train_reviews, args.alpha)
     y_pred = np.array(
         [
             nb_predict(("POS", "NEG"), vocab, prior, nb_model, doc)
