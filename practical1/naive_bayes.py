@@ -140,6 +140,12 @@ def split_data(
     train = []
     test = []
     for i, clx in enumerate(("POS", "NEG")):
+        print(
+            f"Getting data for class {clx} \n"
+            f"Using train indices {starts_stops[i][0]} and "
+            f"test indices {starts_stops[i][1]}"
+        )
+
         train_idxs = range(starts_stops[i][0][0], starts_stops[i][0][1])
         test_idxs = range(starts_stops[i][1][0], starts_stops[i][1][1])
         train_data = [
@@ -171,12 +177,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--alpha", "-a", type=int, help="Value to use for Smoothing", default=0
     )
+    parser.add_argument(
+        "-pi", "--pos-idxs", nargs=4, type=int, default=[0, 900, 900, 1000]
+    )
+    parser.add_argument(
+        "-ni", "--neg-idxs", nargs=4, type=int, default=[0, 900, 900, 1000]
+    )
     args = parser.parse_args()
     with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
 
     train_reviews, test_reviews = split_data(
-        reviews, ((0, 900), (900, 1000)), ((0, 90), (900, 909))
+        reviews,
+        (args.pos_idxs[:2], args.pos_idxs[2:]),
+        (args.neg_idxs[:2], args.neg_idxs[2:]),
     )
 
     vocab, prior, nb_model = train_nb(("POS", "NEG"), train_reviews, args.alpha)
