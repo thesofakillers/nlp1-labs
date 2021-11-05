@@ -122,6 +122,42 @@ def nb_predict(
     return np.argmax(score)
 
 
+def split_data(
+    data: tg.List[tg.Dict],
+    pos_start_stop: tg.Tuple[tg.Tuple[int, int], tg.Tuple[int, int]],
+    neg_start_stop: tg.Optional[
+        tg.Tuple[tg.Tuple[int, int], tg.Tuple[int, int]]
+    ] = None,
+):
+    """
+    Splits data into training and testing sets,
+    allowing for different starts and stops between
+    negative and positive classes
+    """
+    if neg_start_stop is None:
+        neg_start_stop = pos_start_stop
+    starts_stops = (pos_start_stop, neg_start_stop)
+    train = []
+    test = []
+    for i, clx in enumerate(("POS", "NEG")):
+        train_idxs = range(starts_stops[i][0][0], starts_stops[i][0][1])
+        test_idxs = range(starts_stops[i][1][0], starts_stops[i][1][1])
+        train_data = [
+            data_entry
+            for data_entry in data
+            if data_entry["cv"] in train_idxs and data_entry["sentiment"] == clx
+        ]
+        train += train_data
+
+        test_data = [
+            data_entry
+            for data_entry in data
+            if data_entry["cv"] in test_idxs and data_entry["sentiment"] == clx
+        ]
+        test += test_data
+    return train, test
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Naive Bayes Sentiment Analysis")
@@ -139,14 +175,9 @@ if __name__ == "__main__":
     with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
 
-    train_idxs = range(0, 900)
-    test_idxs = range(900, 1000)
-    train_reviews = [
-        review for review in reviews for i in train_idxs if review["cv"] == i
-    ]
-    test_reviews = [
-        review for review in reviews for i in test_idxs if review["cv"] == i
-    ]
+    train_reviews, test_reviews = split_data(
+        reviews, ((0, 900), (900, 1000)), ((0, 90), (900, 909))
+    )
 
     vocab, prior, nb_model = train_nb(("POS", "NEG"), train_reviews, args.alpha)
     y_pred = np.array(
