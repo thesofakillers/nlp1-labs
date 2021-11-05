@@ -141,7 +141,7 @@ def split_data(
     test = []
     for i, clx in enumerate(("POS", "NEG")):
         print(
-            f"Getting data for class {clx} \n"
+            f"Splitting data for class {clx} \n"
             f"Using train indices {starts_stops[i][0]} and "
             f"test indices {starts_stops[i][1]}"
         )
