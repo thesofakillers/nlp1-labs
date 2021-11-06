@@ -85,9 +85,9 @@ def train_nb(
 
 def nb_predict(
     classes: tg.Tuple[str, ...],
-    vocab: tg.Set,
+    vocab: tg.Dict,
     logprior: npt.NDArray[float],
-    loglikelihood: tg.Dict,
+    loglikelihood: tg.List[tg.Dict],
     doc: tg.Dict,
 ):
     """
@@ -96,7 +96,7 @@ def nb_predict(
     Parameters
     ----------
     classes : tg.Tuple[str, ...]
-    vocab : tg.Set
+    vocab : tg.Dict
     prior : npt.NDArray
     nb_model : tg.Dict
     doc : tg.Dict
@@ -193,10 +193,10 @@ if __name__ == "__main__":
         (args.neg_idxs[:2], args.neg_idxs[2:]),
     )
 
-    vocab, prior, nb_model = train_nb(("POS", "NEG"), train_reviews, args.alpha)
+    vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_reviews, args.alpha)
     y_pred = np.array(
         [
-            nb_predict(("POS", "NEG"), vocab, prior, nb_model, doc)
+            nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
             for doc in test_reviews
         ]
     )
