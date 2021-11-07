@@ -194,6 +194,11 @@ def perform_rr_cv(
 ):
     """
     Performs round robin cross validation
+
+    Returns
+    -------
+    metrics : npt.NDArray
+        (2, n_splits) array of accuracies and vocab sizes
     """
     if data_len is None:
         data_len = len(data)
@@ -201,7 +206,7 @@ def perform_rr_cv(
     base_split: npt.NDArray = np.arange(0, (data_len - n_splits) + 1, modulo)
     splits: tg.List[npt.NDArray] = [base_split + i for i in range(n_splits)]
 
-    metrics = np.zeros(n_splits, dtype=float)
+    metrics = np.zeros((2, n_splits), dtype=float)
     for i, test_data_idxs in enumerate(splits):
         print(f"Cross validating on split {i+1} of {n_splits}")
         train_data_idxs = np.concatenate(splits[:i] + splits[(i + 1) :])  # noqa:E203
@@ -224,7 +229,8 @@ def perform_rr_cv(
 
         accuracy = (y_pred == y_true).astype(int).sum() / len(y_true)
 
-        metrics[i] = accuracy
+        metrics[0, i] = accuracy
+        metrics[1, i] = len(vocab.keys())
 
     print("Cross validation complete.")
 
@@ -289,6 +295,7 @@ if __name__ == "__main__":
         reviews = json.load(f)
 
     if args.stem:
+        print("Stemming requested; stemming...")
         stemmer = PorterStemmer()
         reviews = [
             {
@@ -301,6 +308,7 @@ if __name__ == "__main__":
             }
             for review in reviews
         ]
+        print("Stemming complete.")
     else:
         reviews = [
             {
@@ -319,19 +327,27 @@ if __name__ == "__main__":
             review_words = [
                 word for sentence in review["content"] for word, _pos in sentence
             ]
+            print("Computing bigrams...")
             review_bigrams = list(ngrams(review_words, 2))
             bigram_pos = ["bigram" for bigram in review_bigrams]
             review["content"].append(list(zip(review_bigrams, bigram_pos)))
             if args.trigrams:
+                print("Computing trigrams...")
                 review_trigrams = list(ngrams(review_words, 3))
                 trigram_pos = ["trigram" for trigram in review_trigrams]
                 review["content"].append(list(zip(review_trigrams, trigram_pos)))
+                print("Done.")
 
     if args.cross_validate:
-        accuracies = perform_rr_cv(reviews, 10, 10, args.alpha, 1000)
-
-        print(accuracies.mean())
-        print(accuracies.var())
+        accuracies, vocab_sizes = perform_rr_cv(reviews, 10, 10, args.alpha, 1000)
+        print("---")
+        print(f"CV accuracies: {accuracies}")
+        print(f"mean CV accuracy: {accuracies.mean()}")
+        print(f"CV accuracy variance: {accuracies.var()}")
+        print("---")
+        print(f"CV vocab sizes: {vocab_sizes}")
+        print(f"mean CV vocab size: {vocab_sizes.mean()}")
+        print(f"CV vocab size variance: {vocab_sizes.var()}")
     else:
         train_reviews, test_data = split_data(
             reviews,
@@ -350,4 +366,5 @@ if __name__ == "__main__":
             ]
         )
         y_true = np.array([SENT_MAP[doc["sentiment"]] for doc in test_data])
-        print((y_pred == y_true).astype(int).sum() / len(y_true))
+        accuracy = (y_pred == y_true).astype(int).sum() / len(y_true)
+        print(f"accuracy: {accuracy}")
