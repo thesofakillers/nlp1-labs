@@ -1,11 +1,13 @@
 """Review Sentiment Analysis using Naive Bayes"""
 
+import sys
 import typing as tg
 import argparse
 import json
 import numpy as np
 import numpy.typing as npt
 from nltk.stem.porter import PorterStemmer
+from nltk.util import ngrams
 
 SENT_MAP = {
     "POS": 0,
@@ -13,38 +15,29 @@ SENT_MAP = {
 }
 
 
-def extract_vocab(documents: tg.List[tg.Dict], stem: bool = False):
+def extract_vocab(documents: tg.List[tg.Dict]):
     """
     Extracts the vocabulary from the documents,
 
     Parameters
     ----------
     documents : tg.List[Dict]
-    stem : bool, default False
-        Whether to stem the words, if False,
-        words are simply lower-cased
 
     Returns
     -------
     dict
         The vocabulary
     """
-    if stem:
-        stemmer = PorterStemmer()
     vocab = {}
     for doc in documents:
         for sentence in doc["content"]:
-            for word, _pos in sentence:
-                if stem:
-                    word = stemmer.stem(word)
-                else:
-                    word = word.lower()
-                if word not in vocab:
-                    vocab[word] = {"POS": 0, "NEG": 0}
+            for token, _pos in sentence:
+                if token not in vocab:
+                    vocab[token] = {"POS": 0, "NEG": 0}
                 if doc["sentiment"] == "POS":
-                    vocab[word]["POS"] += 1
+                    vocab[token]["POS"] += 1
                 elif doc["sentiment"] == "NEG":
-                    vocab[word]["NEG"] += 1
+                    vocab[token]["NEG"] += 1
     return vocab
 
 
@@ -52,7 +45,6 @@ def train_nb(
     classes: tg.Tuple[str, ...],
     documents: tg.List[tg.Dict],
     alpha: float = 0,
-    stem: bool = False,
 ):
     """
     Trains a Naive Bayes model
@@ -64,9 +56,6 @@ def train_nb(
         the documents on which to train on
     alpha : float
         smoothing parameter, which is added to word counts.
-    stem : bool, default False
-        Whether to stem the words, if False,
-        words are simply lower-cased
 
     Returns
     -------
@@ -77,7 +66,7 @@ def train_nb(
     loglikelihood : tg.List[tg.Dict]
         (n_classes, ) array of dictionary containing loglikelihood of each word
     """
-    vocab: tg.Dict = extract_vocab(documents, stem)
+    vocab: tg.Dict = extract_vocab(documents)
     if alpha == 0:
         # filter vocab if we are not applying smoothing
         vocab = {k: v for (k, v) in vocab.items() if v["POS"] > 0 and v["NEG"] > 0}
@@ -104,7 +93,6 @@ def nb_predict(
     logprior: npt.NDArray[float],
     loglikelihood: tg.List[tg.Dict],
     doc: tg.Dict,
-    stem: bool = False,
 ):
     """
     Predicts the sentiment of a document
@@ -117,30 +105,24 @@ def nb_predict(
     loglikelihood : tg.List[tg.Dict]
     doc : tg.Dict
         the document to classify
-    stem: bool, default False
-        Whether to stem the words, if False,
-        words are simply lower-cased
 
     Returns
     -------
     int
         The index of the predicted class
     """
-    if stem:
-        stemmer = PorterStemmer()
-
     doc_text = [
-        stemmer.stem(word) if stem else word.lower()
+        token
         for sentence in doc["content"]
-        for word, _pos in sentence
-        if word in vocab
+        for token, _pos in sentence
+        if token in vocab
     ]
     score: npt.NDArray = np.zeros(len(classes), dtype=float)
     for c, clx in enumerate(classes):
         score[c] = logprior[c]
-        for word in doc_text:
-            if word in vocab:
-                score[c] += loglikelihood[c][word]
+        for token in doc_text:
+            if token in vocab:
+                score[c] += loglikelihood[c][token]
 
     return np.argmax(score)
 
@@ -209,7 +191,6 @@ def perform_rr_cv(
     modulo,
     alpha=0,
     data_len: tg.Optional[int] = None,
-    stem: bool = False,
 ):
     """
     Performs round robin cross validation
@@ -232,12 +213,10 @@ def perform_rr_cv(
             data_entry for data_entry in data if data_entry["cv"] in test_data_idxs
         ]
 
-        vocab, logprior, loglikelihood = train_nb(
-            ("POS", "NEG"), train_data, alpha, stem
-        )
+        vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_data, alpha)
         y_pred = np.array(
             [
-                nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc, stem)
+                nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
                 for doc in test_data
             ]
         )
@@ -291,12 +270,65 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s", "--stem", action="store_true", default=False, help="Whether to stem words"
     )
+    parser.add_argument(
+        "-b",
+        "--bigrams",
+        action="store_true",
+        default=False,
+        help="Whether to use bigrams as well as unigrams",
+    )
+    parser.add_argument(
+        "-t",
+        "--trigrams",
+        action="store_true",
+        default=False,
+        help="Whether to use trigrams and bigrams as well as unigrams",
+    )
     args = parser.parse_args()
     with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
 
+    if args.stem:
+        stemmer = PorterStemmer()
+        reviews = [
+            {
+                "cv": review["cv"],
+                "sentiment": review["sentiment"],
+                "content": [
+                    [(stemmer.stem(word), pos) for word, pos in sentence]
+                    for sentence in review["content"]
+                ],
+            }
+            for review in reviews
+        ]
+    else:
+        reviews = [
+            {
+                "cv": review["cv"],
+                "sentiment": review["sentiment"],
+                "content": [
+                    [(word.lower(), pos) for word, pos in sentence]
+                    for sentence in review["content"]
+                ],
+            }
+            for review in reviews
+        ]
+
+    if args.bigrams or args.trigrams:
+        for review in reviews:
+            review_words = [
+                word for sentence in review["content"] for word, _pos in sentence
+            ]
+            review_bigrams = list(ngrams(review_words, 2))
+            bigram_pos = ["bigram" for bigram in review_bigrams]
+            review["content"].append(list(zip(review_bigrams, bigram_pos)))
+            if args.trigrams:
+                review_trigrams = list(ngrams(review_words, 3))
+                trigram_pos = ["trigram" for trigram in review_trigrams]
+                review["content"].append(list(zip(review_trigrams, trigram_pos)))
+
     if args.cross_validate:
-        accuracies = perform_rr_cv(reviews, 10, 10, args.alpha, 1000, args.stem)
+        accuracies = perform_rr_cv(reviews, 10, 10, args.alpha, 1000)
 
         print(accuracies.mean())
         print(accuracies.var())
@@ -308,14 +340,12 @@ if __name__ == "__main__":
         )
 
         vocab, logprior, loglikelihood = train_nb(
-            ("POS", "NEG"), train_reviews, args.alpha, args.stem
+            ("POS", "NEG"), train_reviews, args.alpha
         )
         print(f"vocab size:{len(vocab.keys())}")
         y_pred = np.array(
             [
-                nb_predict(
-                    ("POS", "NEG"), vocab, logprior, loglikelihood, doc, args.stem
-                )
+                nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
                 for doc in test_data
             ]
         )
