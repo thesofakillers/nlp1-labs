@@ -40,7 +40,7 @@ def extract_vocab(documents: tg.List[tg.Dict]):
 
 
 def train_nb(
-    classes: tg.Tuple[str, ...], documents: tg.List[tg.Dict], alpha: float = 1
+    classes: tg.Tuple[str, ...], documents: tg.List[tg.Dict], alpha: float = 0
 ):
     """
     Trains a Naive Bayes model
