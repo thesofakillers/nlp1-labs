@@ -252,7 +252,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "-cv",
         "--cross-validate",
-        type=bool,
         action="store_true",
         default=False,
         help="Flag to perform cross validation",
