@@ -180,6 +180,46 @@ def split_data(
     return train, test
 
 
+def perform_rr_cv(data, n_splits, modulo, alpha=0, data_len: tg.Optional[int] = None):
+    """
+    Performs round robin cross validation
+    """
+    if data_len is None:
+        data_len = len(data)
+
+    base_split: npt.NDArray = np.arange(0, (data_len - n_splits) + 1, modulo)
+    splits: tg.List[npt.NDArray] = [base_split + i for i in range(n_splits)]
+
+    metrics = np.zeros(n_splits, dtype=float)
+    for i, test_data_idxs in enumerate(splits):
+        print(f"Cross validating on split {i+1} of {n_splits}")
+        train_data_idxs = np.concatenate(splits[:i] + splits[(i + 1) :])  # noqa:E203
+
+        train_data = [
+            data_entry for data_entry in data if data_entry["cv"] in train_data_idxs
+        ]
+        test_data = [
+            data_entry for data_entry in data if data_entry["cv"] in test_data_idxs
+        ]
+
+        vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_data, alpha)
+        y_pred = np.array(
+            [
+                nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
+                for doc in test_data
+            ]
+        )
+        y_true = np.array([SENT_MAP[doc["sentiment"]] for doc in test_data])
+
+        accuracy = (y_pred == y_true).astype(int).sum() / len(y_true)
+
+        metrics[i] = accuracy
+
+    print("Cross validation complete.")
+
+    return metrics
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Naive Bayes Sentiment Analysis")
@@ -194,27 +234,53 @@ if __name__ == "__main__":
         "--alpha", "-a", type=int, help="Value to use for Smoothing", default=0
     )
     parser.add_argument(
-        "-pi", "--pos-idxs", nargs=4, type=int, default=[0, 900, 900, 1000]
+        "-pi",
+        "--pos-idxs",
+        nargs=4,
+        type=int,
+        default=[0, 900, 900, 1000],
+        help="Positive train and test start and stop indices. Ignored if performing CV",
     )
     parser.add_argument(
-        "-ni", "--neg-idxs", nargs=4, type=int, default=[0, 900, 900, 1000]
+        "-ni",
+        "--neg-idxs",
+        nargs=4,
+        type=int,
+        default=[0, 900, 900, 1000],
+        help="Negative train and test start and stop indices. Ignored if performing CV",
+    )
+    parser.add_argument(
+        "-cv",
+        "--cross-validate",
+        type=bool,
+        action="store_true",
+        default=False,
+        help="Flag to perform cross validation",
     )
     args = parser.parse_args()
     with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
 
-    train_reviews, test_reviews = split_data(
-        reviews,
-        (args.pos_idxs[:2], args.pos_idxs[2:]),
-        (args.neg_idxs[:2], args.neg_idxs[2:]),
-    )
+    if args.cross_validate:
+        accuracies = perform_rr_cv(reviews, 10, 10, args.alpha, 1000)
 
-    vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_reviews, args.alpha)
-    y_pred = np.array(
-        [
-            nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
-            for doc in test_reviews
-        ]
-    )
-    y_true = np.array([SENT_MAP[doc["sentiment"]] for doc in test_reviews])
-    print((y_pred == y_true).astype(int).sum() / len(y_true))
+        print(accuracies.mean())
+        print(accuracies.var())
+    else:
+        train_reviews, test_data = split_data(
+            reviews,
+            (args.pos_idxs[:2], args.pos_idxs[2:]),
+            (args.neg_idxs[:2], args.neg_idxs[2:]),
+        )
+
+        vocab, logprior, loglikelihood = train_nb(
+            ("POS", "NEG"), train_reviews, args.alpha
+        )
+        y_pred = np.array(
+            [
+                nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
+                for doc in test_data
+            ]
+        )
+        y_true = np.array([SENT_MAP[doc["sentiment"]] for doc in test_data])
+        print((y_pred == y_true).astype(int).sum() / len(y_true))
