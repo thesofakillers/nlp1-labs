@@ -128,11 +128,27 @@ def split_data(
     neg_start_stop: tg.Optional[
         tg.Tuple[tg.Tuple[int, int], tg.Tuple[int, int]]
     ] = None,
-):
+) -> tg.Tuple[tg.List[tg.Dict], tg.List[tg.Dict]]:
     """
     Splits data into training and testing sets,
     allowing for different starts and stops between
     negative and positive classes
+
+    Parameters
+    ----------
+    data : tg.List[Dict]
+        the data to split
+    pos_start_stop : tg.Tuple[tg.Tuple[int, int], tg.Tuple[int, int]]
+        ((train_start, train_stop), (test_start, test_stop))
+        for positive class
+    neg_start_stop : tg.Tuple[tg.Tuple[int, int], tg.Tuple[int, int]]
+        ((train_start, train_stop), (test_start, test_stop))
+        for negative class. Optional, if None, will use the same as positive
+
+    Returns
+    -------
+    tg.Tuple[tg.List[Dict], tg.List[Dict]]
+        (train_data, test_data)
     """
     if neg_start_stop is None:
         neg_start_stop = pos_start_stop
