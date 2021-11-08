@@ -15,6 +15,81 @@ SENT_MAP = {
 }
 
 
+def preprocess_reviews(
+    reviews: tg.List[tg.Dict],
+    stem: bool = False,
+    bigrams: bool = False,
+    trigrams: bool = False,
+    cached: bool = False,
+) -> tg.List[tg.Dict]:
+    """
+    Preprocesses the reviews with lower-casing or stemming
+    and/or bigram and trigram calculation
+
+    Parameters
+    ----------
+    reviews : tg.List[Dict]
+        the reviews to preprocess
+    stem : bool, default False
+        Whether to stem the reviews, if False, simply lower-cases
+    bigram : bool, default False
+        Whether to calculate bigrams
+    trigrams : bool, default False
+        Whether to calculate bigrams _and_ trigrams
+    cached : bool, default False
+        Whether the passed `reviews` are already lower-cased/stemmed
+
+    Returns
+    -------
+    tg.List[Dict]
+        the preprocessed reviews
+    """
+    if not cached:
+        if stem:
+            print("Stemming requested; stemming...")
+            stemmer = PorterStemmer()
+            reviews = [
+                {
+                    "cv": review["cv"],
+                    "sentiment": review["sentiment"],
+                    "content": [
+                        [(stemmer.stem(word), pos) for word, pos in sentence]
+                        for sentence in review["content"]
+                    ],
+                }
+                for review in reviews
+            ]
+            print("Stemming complete.")
+        else:
+            reviews = [
+                {
+                    "cv": review["cv"],
+                    "sentiment": review["sentiment"],
+                    "content": [
+                        [(word.lower(), pos) for word, pos in sentence]
+                        for sentence in review["content"]
+                    ],
+                }
+                for review in reviews
+            ]
+    if bigrams or trigrams:
+        for review in reviews:
+            review_words = [
+                word for sentence in review["content"] for word, _pos in sentence
+            ]
+            print("Computing bigrams...")
+            review_bigrams = list(ngrams(review_words, 2))
+            bigram_pos = ["bigram" for bigram in review_bigrams]
+            review["content"].append(list(zip(review_bigrams, bigram_pos)))
+            if trigrams:
+                print("Computing trigrams...")
+                review_trigrams = list(ngrams(review_words, 3))
+                trigram_pos = ["trigram" for trigram in review_trigrams]
+                review["content"].append(list(zip(review_trigrams, trigram_pos)))
+                print("Done.")
+    return reviews
+
+
 def extract_vocab(documents: tg.List[tg.Dict]):
     """
     Extracts the vocabulary from the documents,
@@ -294,49 +369,9 @@ if __name__ == "__main__":
     with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
 
-    if args.stem:
-        print("Stemming requested; stemming...")
-        stemmer = PorterStemmer()
-        reviews = [
-            {
-                "cv": review["cv"],
-                "sentiment": review["sentiment"],
-                "content": [
-                    [(stemmer.stem(word), pos) for word, pos in sentence]
-                    for sentence in review["content"]
-                ],
-            }
-            for review in reviews
-        ]
-        print("Stemming complete.")
-    else:
-        reviews = [
-            {
-                "cv": review["cv"],
-                "sentiment": review["sentiment"],
-                "content": [
-                    [(word.lower(), pos) for word, pos in sentence]
-                    for sentence in review["content"]
-                ],
-            }
-            for review in reviews
-        ]
-
-    if args.bigrams or args.trigrams:
-        for review in reviews:
-            review_words = [
-                word for sentence in review["content"] for word, _pos in sentence
-            ]
-            print("Computing bigrams...")
-            review_bigrams = list(ngrams(review_words, 2))
-            bigram_pos = ["bigram" for bigram in review_bigrams]
-            review["content"].append(list(zip(review_bigrams, bigram_pos)))
-            if args.trigrams:
-                print("Computing trigrams...")
-                review_trigrams = list(ngrams(review_words, 3))
-                trigram_pos = ["trigram" for trigram in review_trigrams]
-                review["content"].append(list(zip(review_trigrams, trigram_pos)))
-                print("Done.")
+    reviews = preprocess_reviews(
+        reviews, stem=args.stem, bigrams=args.bigrams, trigrams=args.trigrams
+    )
 
     if args.cross_validate:
         accuracies, vocab_sizes = perform_rr_cv(reviews, 10, 10, args.alpha, 1000)
