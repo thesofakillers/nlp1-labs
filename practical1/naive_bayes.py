@@ -1,6 +1,7 @@
 """Review Sentiment Analysis using Naive Bayes"""
 
 import sys
+import copy
 import typing as tg
 import argparse
 import json
@@ -48,7 +49,7 @@ def preprocess_reviews(
         if stem:
             print("Stemming requested; stemming...")
             stemmer = PorterStemmer()
-            reviews = [
+            new_reviews = [
                 {
                     "cv": review["cv"],
                     "sentiment": review["sentiment"],
@@ -61,7 +62,7 @@ def preprocess_reviews(
             ]
             print("Stemming complete.")
         else:
-            reviews = [
+            new_reviews = [
                 {
                     "cv": review["cv"],
                     "sentiment": review["sentiment"],
@@ -72,22 +73,23 @@ def preprocess_reviews(
                 }
                 for review in reviews
             ]
+    else:
+        new_reviews = copy.deepcopy(reviews)
     if bigrams or trigrams:
-        for review in reviews:
+        print("Computing ngrams...")
+        for review in new_reviews:
             review_words = [
                 word for sentence in review["content"] for word, _pos in sentence
             ]
-            print("Computing bigrams...")
             review_bigrams = list(ngrams(review_words, 2))
             bigram_pos = ["bigram" for bigram in review_bigrams]
             review["content"].append(list(zip(review_bigrams, bigram_pos)))
             if trigrams:
-                print("Computing trigrams...")
                 review_trigrams = list(ngrams(review_words, 3))
                 trigram_pos = ["trigram" for trigram in review_trigrams]
                 review["content"].append(list(zip(review_trigrams, trigram_pos)))
-                print("Done.")
-    return reviews
+        print("Done.")
+    return new_reviews
 
 
 def extract_vocab(documents: tg.List[tg.Dict]):
