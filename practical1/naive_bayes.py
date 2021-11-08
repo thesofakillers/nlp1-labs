@@ -1,6 +1,5 @@
 """Review Sentiment Analysis using Naive Bayes"""
 
-import sys
 import copy
 import typing as tg
 import argparse
@@ -9,6 +8,7 @@ import numpy as np
 import numpy.typing as npt
 from nltk.stem.porter import PorterStemmer
 from nltk.util import ngrams
+from utils import extract_vocab
 
 SENT_MAP = {
     "POS": 0,
@@ -90,32 +90,6 @@ def preprocess_reviews(
                 review["content"].append(list(zip(review_trigrams, trigram_pos)))
         print("Done.")
     return new_reviews
-
-
-def extract_vocab(documents: tg.List[tg.Dict]):
-    """
-    Extracts the vocabulary from the documents,
-
-    Parameters
-    ----------
-    documents : tg.List[Dict]
-
-    Returns
-    -------
-    dict
-        The vocabulary
-    """
-    vocab = {}
-    for doc in documents:
-        for sentence in doc["content"]:
-            for token, _pos in sentence:
-                if token not in vocab:
-                    vocab[token] = {"POS": 0, "NEG": 0}
-                if doc["sentiment"] == "POS":
-                    vocab[token]["POS"] += 1
-                elif doc["sentiment"] == "NEG":
-                    vocab[token]["NEG"] += 1
-    return vocab
 
 
 def train_nb(
