@@ -40,7 +40,7 @@ def rr_cv_split(
     return train_splits, test_splits
 
 
-def extract_vocab(documents: tg.List[tg.Dict]):
+def extract_vocab(documents: tg.List[tg.Dict], use_pos: bool = False):
     """
     Extracts the vocabulary from the documents,
 
@@ -56,13 +56,17 @@ def extract_vocab(documents: tg.List[tg.Dict]):
     vocab = {}
     for doc in documents:
         for sentence in doc["content"]:
-            for token, _pos in sentence:
-                if token not in vocab:
-                    vocab[token] = {"POS": 0, "NEG": 0}
+            for token, pos in sentence:
+                if use_pos:
+                    key = (token, pos)
+                else:
+                    key = token
+                if key not in vocab:
+                    vocab[key] = {"POS": 0, "NEG": 0}
                 if doc["sentiment"] == "POS":
-                    vocab[token]["POS"] += 1
+                    vocab[key]["POS"] += 1
                 elif doc["sentiment"] == "NEG":
-                    vocab[token]["NEG"] += 1
+                    vocab[key]["NEG"] += 1
     return vocab
 
 

@@ -13,7 +13,8 @@ from scipy.sparse import csr_matrix
 
 def encode_reviews(
     reviews: tg.List[tg.Dict],
-    token_map: tg.Dict,
+    codeword_map: tg.Dict,
+    use_pos: bool = False,
 ) -> tg.Tuple[npt.NDArray, npt.NDArray]:
     """
     Encode reviews into a features matrix and labels vector.
@@ -28,20 +29,31 @@ def encode_reviews(
         A vector of labels, where each element is either
         0 or 1, representing the sentiment (POS or NEG) of the review.
     """
-    feature_mat = np.zeros((len(reviews), len(token_map)))
+    feature_mat = np.zeros((len(reviews), len(codeword_map)))
     label_vec = np.zeros(len(reviews))
 
     for i, review in enumerate(reviews):
         label_vec[i] = SENT_MAP[review["sentiment"]]
         for sentence in review["content"]:
-            for token, _pos in sentence:
-                if token in token_map:
-                    feature_mat[i, token_map[token]] += 1
+            for token, pos in sentence:
+                if use_pos:
+                    key = (token, pos)
+                else:
+                    key = token
+                if key in codeword_map:
+                    feature_mat[i, codeword_map[key]] += 1
 
     return feature_mat, label_vec
 
 
-def perform_rr_cv(data, n_splits, modulo, data_len: tg.Optional[int] = None):
+def perform_rr_cv(
+    data,
+    n_splits,
+    modulo,
+    data_len: tg.Optional[int] = None,
+    use_pos: bool = False,
+    std: bool = True,
+):
     """
     Performs round robin cross validation
 
@@ -66,18 +78,22 @@ def perform_rr_cv(data, n_splits, modulo, data_len: tg.Optional[int] = None):
         ]
         test_data = [data_entry for data_entry in data if data_entry["cv"] in test_idxs]
 
-        metrics[i] = train_eval_svm(train_data, test_data)
+        metrics[i] = train_eval_svm(train_data, test_data, use_pos, std)
 
     return metrics
 
 
-def train_eval_svm(train_data, test_data):
-    vocab = extract_vocab(train_data)
-    token_map = {token: idx for idx, token in enumerate(vocab)}
-    train_X, train_Y = encode_reviews(train_data, token_map)
-    test_X, test_Y = encode_reviews(test_data, token_map)
+def train_eval_svm(train_data, test_data, use_pos: bool = False, std: bool = True):
+    vocab = extract_vocab(train_data, use_pos)
+    codeword_map = {key: idx for idx, key in enumerate(vocab.keys())}
+    train_X, train_Y = encode_reviews(train_data, codeword_map, use_pos)
+    test_X, test_Y = encode_reviews(test_data, codeword_map, use_pos)
 
-    clf = make_pipeline(StandardScaler(with_mean=False), LinearSVC(max_iter=10000))
+    if std:
+        clf = make_pipeline(StandardScaler(with_mean=False), LinearSVC(max_iter=10000))
+    else:
+        clf = LinearSVC(max_iter=10000)
+
     clf.fit(csr_matrix(train_X), train_Y)
 
     preds = clf.predict(csr_matrix(test_X))
@@ -120,6 +136,20 @@ if __name__ == "__main__":
         default=False,
         help="Flag to perform cross validation",
     )
+    parser.add_argument(
+        "-p",
+        "--pos",
+        action="store_true",
+        default=False,
+        help="Flag to use parts of speech",
+    )
+    parser.add_argument(
+        "-s",
+        "--standardise",
+        action="store_true",
+        default=False,
+        help="Whether to standardise feature matrix before passing to SVM",
+    )
     args = parser.parse_args()
     with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
@@ -127,7 +157,9 @@ if __name__ == "__main__":
     lower_case_reviews = preprocess_reviews(reviews)
 
     if args.cross_validate:
-        accuracies = perform_rr_cv(lower_case_reviews, 10, 10, 1000)
+        accuracies = perform_rr_cv(
+            lower_case_reviews, 10, 10, 1000, args.pos, args.standardise
+        )
         print(accuracies)
         print(f"Mean accuracy: {accuracies.mean()}")
         print(f"accuracy variance: {accuracies.var()}")
@@ -138,5 +170,5 @@ if __name__ == "__main__":
             (args.pos_idxs[:2], args.pos_idxs[2:]),
             (args.neg_idxs[:2], args.neg_idxs[2:]),
         )
-        acc = train_eval_svm(train_reviews, test_reviews)
+        acc = train_eval_svm(train_reviews, test_reviews, args.pos, args.standardise)
         print(acc)
