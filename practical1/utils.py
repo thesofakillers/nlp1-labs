@@ -1,8 +1,43 @@
 """Utils for Sentiment Analysis"""
 import copy
 import typing as tg
-from nltk.utils import ngrams
+import numpy as np
+import numpy.typing as npt
+from nltk.util import ngrams
 from nltk.stem import PorterStemmer
+
+SENT_MAP = {
+    "POS": 0,
+    "NEG": 1,
+}
+
+
+def rr_cv_split(
+    data_len: int,
+    n_splits,
+    modulo,
+    alpha=0,
+):
+    """
+    Performs round robin cross validation
+
+    Returns
+    -------
+    metrics : npt.NDArray
+        (2, n_splits) array of accuracies and vocab sizes
+    """
+
+    base_split: npt.NDArray = np.arange(0, (data_len - n_splits) + 1, modulo)
+    splits: tg.List[npt.NDArray] = [base_split + i for i in range(n_splits)]
+
+    train_splits = np.zeros((n_splits, len(base_split) * (n_splits - 1)))
+    test_splits = np.zeros((n_splits, len(base_split)))
+
+    for i, test_data_idxs in enumerate(splits):
+        train_splits[i] = np.concatenate(splits[:i] + splits[(i + 1) :])  # noqa:E203
+        test_splits[i] = test_data_idxs
+
+    return train_splits, test_splits
 
 
 def extract_vocab(documents: tg.List[tg.Dict]):

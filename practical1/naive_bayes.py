@@ -5,12 +5,7 @@ import argparse
 import json
 import numpy as np
 import numpy.typing as npt
-from utils import extract_vocab, preprocess_reviews, split_data
-
-SENT_MAP = {
-    "POS": 0,
-    "NEG": 1,
-}
+from utils import extract_vocab, preprocess_reviews, split_data, SENT_MAP, rr_cv_split
 
 
 def train_nb(
@@ -117,20 +112,17 @@ def perform_rr_cv(
     if data_len is None:
         data_len = len(data)
 
-    base_split: npt.NDArray = np.arange(0, (data_len - n_splits) + 1, modulo)
-    splits: tg.List[npt.NDArray] = [base_split + i for i in range(n_splits)]
+    train, test = rr_cv_split(data_len, n_splits, modulo)
 
     metrics = np.zeros((2, n_splits), dtype=float)
-    for i, test_data_idxs in enumerate(splits):
+
+    for i, (train_idxs, test_idxs) in enumerate(zip(train, test)):
         print(f"Cross validating on split {i+1} of {n_splits}")
-        train_data_idxs = np.concatenate(splits[:i] + splits[(i + 1) :])  # noqa:E203
 
         train_data = [
-            data_entry for data_entry in data if data_entry["cv"] in train_data_idxs
+            data_entry for data_entry in data if data_entry["cv"] in train_idxs
         ]
-        test_data = [
-            data_entry for data_entry in data if data_entry["cv"] in test_data_idxs
-        ]
+        test_data = [data_entry for data_entry in data if data_entry["cv"] in test_idxs]
 
         vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_data, alpha)
         y_pred = np.array(
