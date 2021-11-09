@@ -6,6 +6,26 @@ import numpy.typing as npt
 from nltk.util import ngrams
 from nltk.stem import PorterStemmer
 
+POS_MAP = {
+    "JJ": "adj",
+    "JJR": "adj",
+    "JJS": "adj",
+    "RB": "adverb",
+    "RBR": "adverb",
+    "RBS": "adverb",
+    "NN": "noun",
+    "NNS": "noun",
+    "NNP": "noun",
+    "NNPS": "noun",
+    "VB": "verb",
+    "VBD": "verb",
+    "VBG": "verb",
+    "VBN": "verb",
+    "VBP": "verb",
+    "VBZ": "verb",
+    "WRB": "adverb",
+}
+
 SENT_MAP = {
     "POS": 0,
     "NEG": 1,
@@ -40,7 +60,9 @@ def rr_cv_split(
     return train_splits, test_splits
 
 
-def extract_vocab(documents: tg.List[tg.Dict], use_pos: bool = False):
+def extract_vocab(
+    documents: tg.List[tg.Dict], use_pos: bool = False, only_open: bool = False
+):
     """
     Extracts the vocabulary from the documents,
 
@@ -59,6 +81,10 @@ def extract_vocab(documents: tg.List[tg.Dict], use_pos: bool = False):
             for token, pos in sentence:
                 if use_pos:
                     key = (token, pos)
+                    if only_open:
+                        if pos not in POS_MAP:
+                            # skip this token
+                            continue
                 else:
                     key = token
                 if key not in vocab:

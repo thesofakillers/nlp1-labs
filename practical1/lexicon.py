@@ -3,27 +3,6 @@ import typing as tg
 import json
 import numpy as np
 
-# anything else --> anypos, using POS_MAP.get(pos, "anypos")
-POS_MAP = {
-    "JJ": "adj",
-    "JJR": "adj",
-    "JJS": "adj",
-    "RB": "adverb",
-    "RBR": "adverb",
-    "RBS": "adverb",
-    "NN": "noun",
-    "NNS": "noun",
-    "NNP": "noun",
-    "NNPS": "noun",
-    "VB": "verb",
-    "VBD": "verb",
-    "VBG": "verb",
-    "VBN": "verb",
-    "VBP": "verb",
-    "VBZ": "verb",
-    "WRB": "adverb",
-}
-
 
 def compute_weighted_score(word_list: tg.List[str], lexicon: tg.Dict) -> int:
     """

@@ -52,6 +52,7 @@ def perform_rr_cv(
     modulo,
     data_len: tg.Optional[int] = None,
     use_pos: bool = False,
+    only_open: bool = False,
     std: bool = True,
 ):
     """
@@ -78,13 +79,19 @@ def perform_rr_cv(
         ]
         test_data = [data_entry for data_entry in data if data_entry["cv"] in test_idxs]
 
-        metrics[i] = train_eval_svm(train_data, test_data, use_pos, std)
+        metrics[i] = train_eval_svm(train_data, test_data, use_pos, only_open, std)
 
     return metrics
 
 
-def train_eval_svm(train_data, test_data, use_pos: bool = False, std: bool = True):
-    vocab = extract_vocab(train_data, use_pos)
+def train_eval_svm(
+    train_data,
+    test_data,
+    use_pos: bool = False,
+    only_open: bool = False,
+    std: bool = True,
+):
+    vocab = extract_vocab(train_data, use_pos, only_open)
     codeword_map = {key: idx for idx, key in enumerate(vocab.keys())}
     train_X, train_Y = encode_reviews(train_data, codeword_map, use_pos)
     test_X, test_Y = encode_reviews(test_data, codeword_map, use_pos)
@@ -150,6 +157,13 @@ if __name__ == "__main__":
         default=False,
         help="Whether to standardise feature matrix before passing to SVM",
     )
+    parser.add_argument(
+        "-o",
+        "--only-open",
+        action="store_true",
+        default=False,
+        help="Whether to use only open-class words when using POS features",
+    )
     args = parser.parse_args()
     with open(args.data, mode="r", encoding="utf-8") as f:
         reviews = json.load(f)
@@ -158,7 +172,7 @@ if __name__ == "__main__":
 
     if args.cross_validate:
         accuracies = perform_rr_cv(
-            lower_case_reviews, 10, 10, 1000, args.pos, args.standardise
+            lower_case_reviews, 10, 10, 1000, args.pos, args.only_open, args.standardise
         )
         print(accuracies)
         print(f"Mean accuracy: {accuracies.mean()}")
@@ -170,5 +184,7 @@ if __name__ == "__main__":
             (args.pos_idxs[:2], args.pos_idxs[2:]),
             (args.neg_idxs[:2], args.neg_idxs[2:]),
         )
-        acc = train_eval_svm(train_reviews, test_reviews, args.pos, args.standardise)
+        acc = train_eval_svm(
+            train_reviews, test_reviews, args.pos, args.only_open, args.standardise
+        )
         print(acc)
