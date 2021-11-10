@@ -20,6 +20,15 @@ def encode_reviews(
     """
     Encode reviews into a features matrix and labels vector.
 
+    Parameters
+    ----------
+    reviews : tg.List[tg.Dict]
+        List of reviews to encode
+    codeword_map: tg.Dict
+        Map of codewords to indices
+    use_pos: bool, default False
+        Whether codeword_map uses word+POS as keys
+
     Returns
     -------
     feature_mat : npt.NDArray
@@ -47,22 +56,43 @@ def encode_reviews(
     return feature_mat, label_vec
 
 
-def perform_rr_cv(
-    data,
-    n_splits,
-    modulo,
+def perform_rr_cv_svm(
+    data: tg.List[tg.Dict],
+    n_splits: int,
+    modulo: int,
     data_len: tg.Optional[int] = None,
     use_pos: bool = False,
     only_open: bool = False,
     std: bool = True,
+    verbose: bool = True,
 ):
     """
-    Performs round robin cross validation
+    Performs round robin cross validation of the SVM model
+
+    Parameters
+    ----------
+    data : tg.List[tg.Dict]
+        List of reviews to perform cross validation on
+    n_splits : int
+        Number of splits to perform
+    modulo : int
+        the modulo to use for round robin splitting
+    data_len : tg.Optional[int]
+        Length of data to use for splitting, if None
+        will be inferred from data
+    use_pos: bool, default False
+        Whether to use word+POS as keys
+    only_open: bool, default False
+        Whether to use only open-class POS words
+    std: bool, default True
+        Whether to standardize the data before training
+    verbose : bool, default True
+        Whether to print out diagnostics
 
     Returns
     -------
     metrics : npt.NDArray
-        (n_splits, ) array of accuracies
+        (4, n_splits) array of accuracies, precisions, recalls and vocab_sizes
     """
 
     if data_len is None:
@@ -73,7 +103,8 @@ def perform_rr_cv(
     metrics = np.zeros((4, n_splits), dtype=float)
 
     for i, (train_idxs, test_idxs) in enumerate(zip(train, test)):
-        print(f"Cross validating on split {i+1} of {n_splits}")
+        if verbose:
+            print(f"Cross validating on split {i+1} of {n_splits}")
 
         train_data = [
             data_entry for data_entry in data if data_entry["cv"] in train_idxs
@@ -82,16 +113,42 @@ def perform_rr_cv(
 
         metrics[:, i] = train_eval_svm(train_data, test_data, use_pos, only_open, std)
 
+    if verbose:
+        print("Cross validation complete.")
+
     return metrics
 
 
 def train_eval_svm(
-    train_data,
-    test_data,
+    train_data: tg.List[tg.Dict],
+    test_data: tg.List[tg.Dict],
     use_pos: bool = False,
     only_open: bool = False,
     std: bool = True,
-):
+) -> tg.Tuple[float, float, float, float]:
+    """
+    Trains and evaluates the SVM model
+
+    Parameters
+    ----------
+    train_data : tg.List[tg.Dict]
+        the training data
+    test_data : tg.List[tg.Dict]
+        the testing data
+    use_pos: bool, default False
+        Whether to use word+POS as keys
+    only_open: bool, default False
+        Whether to use only open-class POS words
+    std: bool, default True
+        Whether to standardize the data before training
+
+
+    Returns
+    -------
+    metrics : tuple of floats
+        tuple of accuracy, precision, recall and vocab size
+
+    """
     vocab = extract_vocab(train_data, use_pos, only_open)
     codeword_map = {key: idx for idx, key in enumerate(vocab.keys())}
     train_X, train_y = encode_reviews(train_data, codeword_map, use_pos)
@@ -176,7 +233,7 @@ if __name__ == "__main__":
     lower_case_reviews = preprocess_reviews(reviews)
 
     if args.cross_validate:
-        accuracies, precisions, recalls, vocab_sizes = perform_rr_cv(
+        accuracies, precisions, recalls, vocab_sizes = perform_rr_cv_svm(
             lower_case_reviews, 10, 10, 1000, args.pos, args.only_open, args.standardise
         )
         print("---")
