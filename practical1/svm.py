@@ -9,6 +9,7 @@ from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 from scipy.sparse import csr_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 
 def encode_reviews(
@@ -69,7 +70,7 @@ def perform_rr_cv(
 
     train, test = rr_cv_split(data_len, n_splits, modulo)
 
-    metrics = np.zeros(n_splits, dtype=float)
+    metrics = np.zeros((4, n_splits), dtype=float)
 
     for i, (train_idxs, test_idxs) in enumerate(zip(train, test)):
         print(f"Cross validating on split {i+1} of {n_splits}")
@@ -79,7 +80,7 @@ def perform_rr_cv(
         ]
         test_data = [data_entry for data_entry in data if data_entry["cv"] in test_idxs]
 
-        metrics[i] = train_eval_svm(train_data, test_data, use_pos, only_open, std)
+        metrics[:, i] = train_eval_svm(train_data, test_data, use_pos, only_open, std)
 
     return metrics
 
@@ -93,20 +94,24 @@ def train_eval_svm(
 ):
     vocab = extract_vocab(train_data, use_pos, only_open)
     codeword_map = {key: idx for idx, key in enumerate(vocab.keys())}
-    train_X, train_Y = encode_reviews(train_data, codeword_map, use_pos)
-    test_X, test_Y = encode_reviews(test_data, codeword_map, use_pos)
+    train_X, train_y = encode_reviews(train_data, codeword_map, use_pos)
+    test_X, test_y = encode_reviews(test_data, codeword_map, use_pos)
 
     if std:
         clf = make_pipeline(StandardScaler(with_mean=False), LinearSVC(max_iter=10000))
     else:
         clf = LinearSVC(max_iter=10000)
 
-    clf.fit(csr_matrix(train_X), train_Y)
+    clf.fit(csr_matrix(train_X), train_y)
 
     preds = clf.predict(csr_matrix(test_X))
-    acc = np.mean(preds == test_Y)
 
-    return acc
+    accuracy = accuracy_score(test_y, preds)
+    precision = precision_score(test_y, preds)
+    recall = recall_score(test_y, preds)
+    vocab_size = len(vocab.keys())
+
+    return accuracy, precision, recall, vocab_size
 
 
 if __name__ == "__main__":
@@ -171,20 +176,35 @@ if __name__ == "__main__":
     lower_case_reviews = preprocess_reviews(reviews)
 
     if args.cross_validate:
-        accuracies = perform_rr_cv(
+        accuracies, precisions, recalls, vocab_sizes = perform_rr_cv(
             lower_case_reviews, 10, 10, 1000, args.pos, args.only_open, args.standardise
         )
-        print(accuracies)
-        print(f"Mean accuracy: {accuracies.mean()}")
-        print(f"accuracy variance: {accuracies.var()}")
-
+        print("---")
+        print(f"CV accuracies: {accuracies}")
+        print(f"mean CV accuracy: {accuracies.mean()}")
+        print(f"CV accuracy variance: {accuracies.var()}")
+        print("---")
+        print(f"CV precisions: {precisions}")
+        print(f"mean CV precision: {precisions.mean()}")
+        print(f"CV precision variance: {precisions.var()}")
+        print("---")
+        print(f"CV recalls: {recalls}")
+        print(f"mean CV recall: {recalls.mean()}")
+        print(f"CV recall variance: {recalls.var()}")
+        print("---")
+        print(f"CV vocab sizes: {vocab_sizes}")
+        print(f"mean CV vocab size: {vocab_sizes.mean()}")
+        print(f"CV vocab size variance: {vocab_sizes.var()}")
     else:
         train_reviews, test_reviews = split_data(
             lower_case_reviews,
             (args.pos_idxs[:2], args.pos_idxs[2:]),
             (args.neg_idxs[:2], args.neg_idxs[2:]),
         )
-        acc = train_eval_svm(
+        accuracy, precision, recall, vocab_size = train_eval_svm(
             train_reviews, test_reviews, args.pos, args.only_open, args.standardise
         )
-        print(acc)
+        print(f"accuracy: {accuracy}")
+        print(f"precision: {precision}")
+        print(f"recall: {recall}")
+        print(f"vocab size: {vocab_size}")

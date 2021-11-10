@@ -6,6 +6,7 @@ import numpy.typing as npt
 from nltk.util import ngrams
 from nltk.stem import PorterStemmer
 
+
 POS_MAP = {
     "JJ": "adj",
     "JJR": "adj",

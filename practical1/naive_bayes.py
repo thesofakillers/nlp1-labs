@@ -6,6 +6,7 @@ import json
 import numpy as np
 import numpy.typing as npt
 from utils import extract_vocab, preprocess_reviews, split_data, SENT_MAP, rr_cv_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 
 def train_nb(
@@ -107,14 +108,14 @@ def perform_rr_cv(
     Returns
     -------
     metrics : npt.NDArray
-        (2, n_splits) array of accuracies and vocab sizes
+        (2, n_splits) array of accuracies, precisions, recalls and vocab sizes
     """
     if data_len is None:
         data_len = len(data)
 
     train, test = rr_cv_split(data_len, n_splits, modulo)
 
-    metrics = np.zeros((2, n_splits), dtype=float)
+    metrics = np.zeros((4, n_splits), dtype=float)
 
     for i, (train_idxs, test_idxs) in enumerate(zip(train, test)):
         print(f"Cross validating on split {i+1} of {n_splits}")
@@ -124,23 +125,29 @@ def perform_rr_cv(
         ]
         test_data = [data_entry for data_entry in data if data_entry["cv"] in test_idxs]
 
-        vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_data, alpha)
-        y_pred = np.array(
-            [
-                nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
-                for doc in test_data
-            ]
-        )
-        y_true = np.array([SENT_MAP[doc["sentiment"]] for doc in test_data])
-
-        accuracy = (y_pred == y_true).astype(int).sum() / len(y_true)
-
-        metrics[0, i] = accuracy
-        metrics[1, i] = len(vocab.keys())
+        metrics[:, i] = train_eval_nb(train_data, test_data, alpha)
 
     print("Cross validation complete.")
 
     return metrics
+
+
+def train_eval_nb(train_data, test_data, alpha):
+    vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_data, alpha)
+    y_pred = np.array(
+        [
+            nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
+            for doc in test_data
+        ]
+    )
+    y_true = np.array([SENT_MAP[doc["sentiment"]] for doc in test_data])
+
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+    vocab_size = len(vocab.keys())
+
+    return accuracy, precision, recall, vocab_size
 
 
 if __name__ == "__main__":
@@ -205,32 +212,36 @@ if __name__ == "__main__":
     )
 
     if args.cross_validate:
-        accuracies, vocab_sizes = perform_rr_cv(reviews, 10, 10, args.alpha, 1000)
+        accuracies, precisions, recalls, vocab_sizes = perform_rr_cv(
+            reviews, 10, 10, args.alpha, 1000
+        )
         print("---")
         print(f"CV accuracies: {accuracies}")
         print(f"mean CV accuracy: {accuracies.mean()}")
         print(f"CV accuracy variance: {accuracies.var()}")
         print("---")
+        print(f"CV precisions: {precisions}")
+        print(f"mean CV precision: {precisions.mean()}")
+        print(f"CV precision variance: {precisions.var()}")
+        print("---")
+        print(f"CV recalls: {recalls}")
+        print(f"mean CV recall: {recalls.mean()}")
+        print(f"CV recall variance: {recalls.var()}")
+        print("---")
         print(f"CV vocab sizes: {vocab_sizes}")
         print(f"mean CV vocab size: {vocab_sizes.mean()}")
         print(f"CV vocab size variance: {vocab_sizes.var()}")
     else:
-        train_reviews, test_data = split_data(
+        train_reviews, test_reviews = split_data(
             reviews,
             (args.pos_idxs[:2], args.pos_idxs[2:]),
             (args.neg_idxs[:2], args.neg_idxs[2:]),
         )
 
-        vocab, logprior, loglikelihood = train_nb(
-            ("POS", "NEG"), train_reviews, args.alpha
+        accuracy, precision, recall, vocab_size = train_eval_nb(
+            train_reviews, test_reviews, args.alpha
         )
-        print(f"vocab size:{len(vocab.keys())}")
-        y_pred = np.array(
-            [
-                nb_predict(("POS", "NEG"), vocab, logprior, loglikelihood, doc)
-                for doc in test_data
-            ]
-        )
-        y_true = np.array([SENT_MAP[doc["sentiment"]] for doc in test_data])
-        accuracy = (y_pred == y_true).astype(int).sum() / len(y_true)
         print(f"accuracy: {accuracy}")
+        print(f"precision: {precision}")
+        print(f"recall: {recall}")
+        print(f"vocab size: {vocab_size}")
