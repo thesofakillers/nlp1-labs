@@ -95,44 +95,25 @@ def nb_predict(
     return np.argmax(score)
 
 
-def perform_rr_cv(
-    data,
-    n_splits,
-    modulo,
-    alpha=0,
-    data_len: tg.Optional[int] = None,
-):
+def train_eval_nb(
+    train_data: tg.List[tg.Dict], test_data: tg.List[tg.Dict], alpha: float = 0
+) -> tg.Tuple[float, float, float, float]:
     """
-    Performs round robin cross validation
+    Trains and evaluates a Naive Bayes model
+
+    Parameters
+    ----------
+    train_data : tg.List[Dict]
+        the training data
+    test_data : tg.List[Dict]
+    alpha : float, default 0
+        smoothing parameter, which is added to word counts.
 
     Returns
     -------
-    metrics : npt.NDArray
-        (2, n_splits) array of accuracies, precisions, recalls and vocab sizes
+    metrics : tuple of floats
+        tuple of accuracy, precision, recall and vocab size
     """
-    if data_len is None:
-        data_len = len(data)
-
-    train, test = rr_cv_split(data_len, n_splits, modulo)
-
-    metrics = np.zeros((4, n_splits), dtype=float)
-
-    for i, (train_idxs, test_idxs) in enumerate(zip(train, test)):
-        print(f"Cross validating on split {i+1} of {n_splits}")
-
-        train_data = [
-            data_entry for data_entry in data if data_entry["cv"] in train_idxs
-        ]
-        test_data = [data_entry for data_entry in data if data_entry["cv"] in test_idxs]
-
-        metrics[:, i] = train_eval_nb(train_data, test_data, alpha)
-
-    print("Cross validation complete.")
-
-    return metrics
-
-
-def train_eval_nb(train_data, test_data, alpha):
     vocab, logprior, loglikelihood = train_nb(("POS", "NEG"), train_data, alpha)
     y_pred = np.array(
         [
@@ -148,6 +129,62 @@ def train_eval_nb(train_data, test_data, alpha):
     vocab_size = len(vocab.keys())
 
     return accuracy, precision, recall, vocab_size
+
+
+def perform_rr_cv_nb(
+    data: tg.List[tg.Dict],
+    n_splits: int,
+    modulo: int,
+    alpha: float = 0,
+    data_len: tg.Optional[int] = None,
+    verbose: bool = True
+):
+    """
+    Performs round robin cross validation of a naive bayes model
+
+    Parameters
+    ----------
+    data : tg.List[tg.Dict]
+        the data to use for training and testing
+    n_splits : int
+        the number of splits to perform
+    modulo : int
+        the modulo to use for round robin splitting
+    alpha : float, default 0
+        smoothing parameter, which is added to word counts.
+    data_len : int, default None
+        The length of the data to split. If not provided
+        is inferred from the data
+    verbose: bool, default True
+        Whether to print diagnostics
+
+    Returns
+    -------
+    metrics : npt.NDArray
+        (4, n_splits) array of accuracies, precisions, recalls and vocab sizes
+    """
+    if data_len is None:
+        data_len = len(data)
+
+    train, test = rr_cv_split(data_len, n_splits, modulo)
+
+    metrics = np.zeros((4, n_splits), dtype=float)
+
+    for i, (train_idxs, test_idxs) in enumerate(zip(train, test)):
+        if verbose:
+            print(f"Cross validating on split {i+1} of {n_splits}")
+
+        train_data = [
+            data_entry for data_entry in data if data_entry["cv"] in train_idxs
+        ]
+        test_data = [data_entry for data_entry in data if data_entry["cv"] in test_idxs]
+
+        metrics[:, i] = train_eval_nb(train_data, test_data, alpha)
+
+    if verbose:
+        print("Cross validation complete.")
+
+    return metrics
 
 
 if __name__ == "__main__":
@@ -212,7 +249,7 @@ if __name__ == "__main__":
     )
 
     if args.cross_validate:
-        accuracies, precisions, recalls, vocab_sizes = perform_rr_cv(
+        accuracies, precisions, recalls, vocab_sizes = perform_rr_cv_nb(
             reviews, 10, 10, args.alpha, 1000
         )
         print("---")

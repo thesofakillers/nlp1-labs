@@ -33,70 +33,6 @@ SENT_MAP = {
 }
 
 
-def rr_cv_split(
-    data_len: int,
-    n_splits,
-    modulo,
-    alpha=0,
-):
-    """
-    Performs round robin cross validation
-
-    Returns
-    -------
-    metrics : npt.NDArray
-        (2, n_splits) array of accuracies and vocab sizes
-    """
-
-    base_split: npt.NDArray = np.arange(0, (data_len - n_splits) + 1, modulo)
-    splits: tg.List[npt.NDArray] = [base_split + i for i in range(n_splits)]
-
-    train_splits = np.zeros((n_splits, len(base_split) * (n_splits - 1)))
-    test_splits = np.zeros((n_splits, len(base_split)))
-
-    for i, test_data_idxs in enumerate(splits):
-        train_splits[i] = np.concatenate(splits[:i] + splits[(i + 1) :])  # noqa:E203
-        test_splits[i] = test_data_idxs
-
-    return train_splits, test_splits
-
-
-def extract_vocab(
-    documents: tg.List[tg.Dict], use_pos: bool = False, only_open: bool = False
-):
-    """
-    Extracts the vocabulary from the documents,
-
-    Parameters
-    ----------
-    documents : tg.List[Dict]
-
-    Returns
-    -------
-    dict
-        The vocabulary
-    """
-    vocab = {}
-    for doc in documents:
-        for sentence in doc["content"]:
-            for token, pos in sentence:
-                if use_pos:
-                    key = (token, pos)
-                    if only_open:
-                        if pos not in POS_MAP:
-                            # skip this token
-                            continue
-                else:
-                    key = token
-                if key not in vocab:
-                    vocab[key] = {"POS": 0, "NEG": 0}
-                if doc["sentiment"] == "POS":
-                    vocab[key]["POS"] += 1
-                elif doc["sentiment"] == "NEG":
-                    vocab[key]["NEG"] += 1
-    return vocab
-
-
 def preprocess_reviews(
     reviews: tg.List[tg.Dict],
     stem: bool = False,
@@ -173,6 +109,47 @@ def preprocess_reviews(
     return new_reviews
 
 
+def extract_vocab(
+    documents: tg.List[tg.Dict], use_pos: bool = False, only_open: bool = False
+):
+    """
+    Extracts the vocabulary from the documents,
+
+    Parameters
+    ----------
+    documents : tg.List[Dict]
+    use_pos : bool, default False
+        Whether to use the word+POS as vocab keys
+    only_open : bool, default False
+        Whether to only include open-class POS-tagged words,
+        ignored if `use_pos` is False
+
+    Returns
+    -------
+    dict
+        The vocabulary
+    """
+    vocab = {}
+    for doc in documents:
+        for sentence in doc["content"]:
+            for token, pos in sentence:
+                if use_pos:
+                    key = (token, pos)
+                    if only_open:
+                        if pos not in POS_MAP:
+                            # skip this token
+                            continue
+                else:
+                    key = token
+                if key not in vocab:
+                    vocab[key] = {"POS": 0, "NEG": 0}
+                if doc["sentiment"] == "POS":
+                    vocab[key]["POS"] += 1
+                elif doc["sentiment"] == "NEG":
+                    vocab[key]["NEG"] += 1
+    return vocab
+
+
 def split_data(
     data: tg.List[tg.Dict],
     pos_start_stop: tg.Tuple[tg.Tuple[int, int], tg.Tuple[int, int]],
@@ -229,3 +206,44 @@ def split_data(
         ]
         test += test_data
     return train, test
+
+
+def rr_cv_split(
+    data_len: int,
+    n_splits: int,
+    modulo: int,
+    alpha: float = 0,
+) -> tg.Tuple[npt.NDArray, npt.NDArray]:
+    """
+    Performs round robin cross validation split
+
+    Parameters
+    ----------
+    data_len : int
+        the length of the data
+    n_splits : int
+        the number of splits
+    modulo : int
+        the modulo to use for round robin splitting
+    alpha : float, default 0
+        the smoothing parameter, which is added to word counts
+
+    Returns
+    -------
+    tuple of ndarray
+        tuple containing two (n_splits, -1) ndarrays
+        the first containing the indices of the training splits
+        and the second containing the indices of the test splits
+    """
+
+    base_split: npt.NDArray = np.arange(0, (data_len - n_splits) + 1, modulo)
+    splits: tg.List[npt.NDArray] = [base_split + i for i in range(n_splits)]
+
+    train_splits = np.zeros((n_splits, len(base_split) * (n_splits - 1)))
+    test_splits = np.zeros((n_splits, len(base_split)))
+
+    for i, test_data_idxs in enumerate(splits):
+        train_splits[i] = np.concatenate(splits[:i] + splits[(i + 1) :])  # noqa:E203
+        test_splits[i] = test_data_idxs
+
+    return train_splits, test_splits
