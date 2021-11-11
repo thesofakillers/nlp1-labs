@@ -4,7 +4,6 @@ import typing as tg
 import argparse
 import json
 import numpy as np
-import numpy.typing as npt
 from utils import extract_vocab, preprocess_reviews, split_data, SENT_MAP, rr_cv_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
@@ -29,7 +28,7 @@ def train_nb(
     -------
     vocab : tg.Dict
         the computed vocabulary for the input documents
-    logprior : npt.NDArray
+    logprior : np.ndarray
         (n_classes, ) array of log priors
     loglikelihood : tg.List[tg.Dict]
         (n_classes, ) array of dictionary containing loglikelihood of each word
@@ -58,7 +57,7 @@ def train_nb(
 def nb_predict(
     classes: tg.Tuple[str, ...],
     vocab: tg.Dict,
-    logprior: npt.NDArray[float],
+    logprior: np.ndarray,
     loglikelihood: tg.List[tg.Dict],
     doc: tg.Dict,
 ):
@@ -69,7 +68,7 @@ def nb_predict(
     ----------
     classes : tg.Tuple[str, ...]
     vocab : tg.Dict
-    prior : npt.NDArray
+    prior : np.ndarray
     loglikelihood : tg.List[tg.Dict]
     doc : tg.Dict
         the document to classify
@@ -85,7 +84,7 @@ def nb_predict(
         for token, _pos in sentence
         if token in vocab
     ]
-    score: npt.NDArray = np.zeros(len(classes), dtype=float)
+    score: np.ndarray = np.zeros(len(classes), dtype=float)
     for c, clx in enumerate(classes):
         score[c] = logprior[c]
         for token in doc_text:
@@ -137,7 +136,7 @@ def perform_rr_cv_nb(
     modulo: int,
     alpha: float = 0,
     data_len: tg.Optional[int] = None,
-    verbose: bool = True
+    verbose: bool = True,
 ):
     """
     Performs round robin cross validation of a naive bayes model
@@ -160,7 +159,7 @@ def perform_rr_cv_nb(
 
     Returns
     -------
-    metrics : npt.NDArray
+    metrics : np.ndarray
         (4, n_splits) array of accuracies, precisions, recalls and vocab sizes
     """
     if data_len is None:

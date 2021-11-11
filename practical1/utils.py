@@ -2,7 +2,6 @@
 import copy
 import typing as tg
 import numpy as np
-import numpy.typing as npt
 from nltk.util import ngrams
 from nltk.stem import PorterStemmer
 
@@ -213,7 +212,7 @@ def rr_cv_split(
     n_splits: int,
     modulo: int,
     alpha: float = 0,
-) -> tg.Tuple[npt.NDArray, npt.NDArray]:
+) -> tg.Tuple[np.ndarray, np.ndarray]:
     """
     Performs round robin cross validation split
 
@@ -236,8 +235,8 @@ def rr_cv_split(
         and the second containing the indices of the test splits
     """
 
-    base_split: npt.NDArray = np.arange(0, (data_len - n_splits) + 1, modulo)
-    splits: tg.List[npt.NDArray] = [base_split + i for i in range(n_splits)]
+    base_split: np.ndarray = np.arange(0, (data_len - n_splits) + 1, modulo)
+    splits: tg.List[np.ndarray] = [base_split + i for i in range(n_splits)]
 
     train_splits = np.zeros((n_splits, len(base_split) * (n_splits - 1)))
     test_splits = np.zeros((n_splits, len(base_split)))

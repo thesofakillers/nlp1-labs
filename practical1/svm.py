@@ -4,7 +4,6 @@ import argparse
 import json
 from utils import extract_vocab, preprocess_reviews, split_data, SENT_MAP, rr_cv_split
 import numpy as np
-import numpy.typing as npt
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
@@ -16,7 +15,7 @@ def encode_reviews(
     reviews: tg.List[tg.Dict],
     codeword_map: tg.Dict,
     use_pos: bool = False,
-) -> tg.Tuple[npt.NDArray, npt.NDArray]:
+) -> tg.Tuple[np.ndarray, np.ndarray]:
     """
     Encode reviews into a features matrix and labels vector.
 
@@ -31,11 +30,11 @@ def encode_reviews(
 
     Returns
     -------
-    feature_mat : npt.NDArray
+    feature_mat : np.ndarray
         A matrix of features, where each row represents
         a review and each column represents the count of
         a given word from our vocab in that review.
-    label_vec : npt.NDArray
+    label_vec : np.ndarray
         A vector of labels, where each element is either
         0 or 1, representing the sentiment (POS or NEG) of the review.
     """
@@ -91,7 +90,7 @@ def perform_rr_cv_svm(
 
     Returns
     -------
-    metrics : npt.NDArray
+    metrics : np.ndarray
         (4, n_splits) array of accuracies, precisions, recalls and vocab_sizes
     """
 
