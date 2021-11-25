@@ -1,3 +1,7 @@
+# User defined
+practical2/trees/
+practical2/trainDevTestTrees_PTB*
+practical2/*.pt
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
