@@ -45,6 +45,21 @@ def examplereader(path: str, lower: bool = False):
         yield Example(tokens=tokens, tree=tree, label=label, transitions=trans)
 
 
+def get_subtrees_dataset(dataset):
+    """
+    Given a dataset of tree examples,
+    returns an augmented dataset including all the subtrees
+    """
+    for example in dataset:
+        subtrees = example.tree.subtrees()
+        for subtree in subtrees:
+            tree_string = " ".join(str(subtree).split())
+            tokens = tokens_from_treestring(tree_string)
+            label = int(tree_string[1])
+            trans = transitions_from_treestring(tree_string)
+            yield Example(tokens=tokens, tree=subtree, label=label, transitions=trans)
+
+
 def get_SST_data(tree_path: str = "trees/", lower: bool = False):
     """
     Returns a dictionary containing for train, dev and test splits
