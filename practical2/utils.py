@@ -39,7 +39,8 @@ def train_model(
     start_epoch = 0
     # simulate a torch dataloader
     data_loader = {
-        key: list(batch_fn(dataset[key], batch_size)) for key in ("train", "dev")
+        key: list(batch_fn(dataset[key], batch_size, device))
+        for key in ("train", "dev")
     }
     # parse checkpoint if provided
     if ckpt_path is not None:
@@ -174,3 +175,39 @@ def prepare_batch(
     y = y.to(device)
 
     return x, y
+
+
+def prepare_treelstm_batch(
+    batch: tg.List[structs.Example],
+    vocab: structs.Vocabulary,
+    device: tg.Optional[torch.device] = None,
+):
+    """
+    Returns sentences reversed (last word first)
+    Returns transitions together with the sentences.
+    """
+    # infer device if not provided
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # pad batch examples so to match length of longest example; NOTE: reversed sequence!
+    maxlen = max([len(ex.tokens) for ex in batch])
+    x = [pad([vocab.w2i.get(t, 0) for t in ex.tokens], maxlen)[::-1] for ex in batch]
+
+    x = torch.LongTensor(x)
+    x = x.to(device)
+
+    y = [ex.label for ex in batch]
+    y = torch.LongTensor(y)
+    y = y.to(device)
+
+    # parse and pad transitions
+    maxlen_t = max([len(ex.transitions) for ex in batch])
+    transitions = [pad(ex.transitions, maxlen_t, pad_value=2) for ex in batch]
+    transitions = np.array(transitions)
+    transitions = transitions.T  # time-major
+    # convert to tensor to enable GPU support
+    transitions = torch.from_numpy(transitions)
+    transitions = transitions.to(device)
+
+    return (x, transitions), y
